@@ -1,0 +1,12 @@
+dependencies{
+    compile project(":chat-core")
+    compile project(":chat-common")
+}
+
+apply plugin: 'application'
+mainClassName = "com.socket.client.Client"
+
+task(runMain, dependsOn: 'classes', type: JavaExec){
+    main = 'com.socket.client.Client'
+    classpath = sourceSets.main.runtimeClasspath
+}

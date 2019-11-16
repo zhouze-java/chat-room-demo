@@ -1,0 +1,46 @@
+ext{
+    lombokVersion = "1.18.2"
+}
+
+// 全部项目配置
+allprojects{
+    group 'com.socket'
+    version '1.0.0'
+
+    // 插件
+    apply plugin: 'java'
+    apply plugin: 'idea'
+
+    // JVM版本要求
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    // java编译的时候缺省状态下会因为中文字符而失败
+    compileJava.options.encoding = 'UTF-8'
+    compileTestJava.options.encoding = 'UTF-8'
+
+    // 仓库
+    repositories{
+        mavenLocal()
+        mavenCentral()
+    }
+
+}
+
+
+// 子项目配置
+subprojects {
+    dependencies {
+        compileOnly "org.projectlombok:lombok:${lombokVersion}"
+        annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+        testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+        testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
+        compile 'org.apache.commons:commons-collections4:4.1'
+
+        // logback
+        compile 'org.slf4j:slf4j-api:1.7.21'
+        compile 'ch.qos.logback:logback-core:1.1.7'
+        compile 'ch.qos.logback:logback-classic:1.1.7'
+    }
+
+}
