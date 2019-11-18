@@ -19,16 +19,21 @@ public class ClientHandler {
     private final Socket socket;
     private final ClientReadHandler readHandler;
     private final ClientWriteHandler writeHandler;
-    private final CloseNotify closeNotify;
+    private final ClientHandlerCallBack clientHandlerCallBack;
+    private final String clientInfo;
 
-    public ClientHandler(Socket socket, CloseNotify closeNotify) throws IOException {
+    public ClientHandler(Socket socket, ClientHandlerCallBack clientHandlerCallBack) throws IOException {
         this.socket = socket;
         readHandler = new ClientReadHandler(socket.getInputStream());
         writeHandler = new ClientWriteHandler(socket.getOutputStream());
-        this.closeNotify = closeNotify;
+        this.clientHandlerCallBack = clientHandlerCallBack;
+        this.clientInfo = socket.getInetAddress().getHostAddress() + ":" + socket.getPort();
         log.info("得到新的客户端连接,客户端地址:[{}:{}]", socket.getInetAddress(), socket.getPort());
     }
 
+    public String getClientInfo(){
+        return clientInfo;
+    }
 
     public void send(String str) {
         writeHandler.send(str);
@@ -48,11 +53,23 @@ public class ClientHandler {
     private void exitBySelf(){
         exit();
         // 通知外层 自己已经关闭
-        closeNotify.onSelfClosed(this);
+        clientHandlerCallBack.onSelfClosed(this);
     }
 
-    public interface CloseNotify {
+    public interface ClientHandlerCallBack {
+        /**
+         * 自身关闭的通知
+         *
+         * @param clientHandler
+         */
         void onSelfClosed(ClientHandler clientHandler);
+
+        /**
+         * 新消息到达的通知
+         * @param clientHandler
+         * @param msg
+         */
+        void onNewMessageArrived(ClientHandler clientHandler, String msg);
     }
 
     class ClientWriteHandler {
@@ -74,6 +91,9 @@ public class ClientHandler {
         }
 
         void send(String str) {
+            if (done) {
+                return;
+            }
             executorService.execute(new WriteRunnable(str));
         }
 
@@ -121,7 +141,7 @@ public class ClientHandler {
                         break;
                     }
 
-                    log.info("接收到的数据:{}", str);
+                    clientHandlerCallBack.onNewMessageArrived(ClientHandler.this, str);
 
                 } while (!done);
             } catch (Exception e) {

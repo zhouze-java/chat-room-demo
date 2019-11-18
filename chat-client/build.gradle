@@ -10,3 +10,12 @@ task(runMain, dependsOn: 'classes', type: JavaExec){
     main = 'com.socket.client.Client'
     classpath = sourceSets.main.runtimeClasspath
 }
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.socket.client.Client'
+    }
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}

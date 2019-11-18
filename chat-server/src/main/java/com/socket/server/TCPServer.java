@@ -8,6 +8,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @author 周泽
@@ -15,14 +18,16 @@ import java.util.List;
  * @Description TCP服务端
  */
 @Slf4j
-public class TCPServer {
+public class TCPServer implements ClientHandler.ClientHandlerCallBack{
 
     private final int port;
     private ClientListener clientListener;
     private List<ClientHandler> clientHanlerList = new ArrayList<>();
+    private final ExecutorService forwardingThreadPoolExecutor;
 
     public TCPServer(int port) {
         this.port = port;
+        this.forwardingThreadPoolExecutor = Executors.newSingleThreadExecutor();
     }
 
     public boolean start(){
@@ -41,20 +46,49 @@ public class TCPServer {
             clientListener.exit();
         }
 
-        for (ClientHandler clientHanler : clientHanlerList) {
-            clientHanler.exit();
+        synchronized (TCPServer.this) {
+            for (ClientHandler clientHanler : clientHanlerList) {
+                clientHanler.exit();
+            }
+
+            clientHanlerList.clear();
         }
-        clientHanlerList.clear();
+        // 关闭线程池
+        forwardingThreadPoolExecutor.shutdownNow();
     }
 
     /**
      * 给所有客户端发送信息
      * @param str
      */
-    public void broadcast(String str) {
+    public synchronized void broadcast(String str) {
         for (ClientHandler clientHanler : clientHanlerList) {
             clientHanler.send(str);
         }
+    }
+
+    @Override
+    public synchronized void onSelfClosed(ClientHandler clientHandler) {
+        clientHanlerList.remove(clientHandler);
+    }
+
+    @Override
+    public void onNewMessageArrived(ClientHandler clientHandler, String msg) {
+        // 收到消息
+        log.info("收到了{}的消息:{}", clientHandler.getClientInfo(), msg);
+        forwardingThreadPoolExecutor.execute(() -> {
+            synchronized (TCPServer.this) {
+                for (ClientHandler handler : clientHanlerList) {
+                    if (handler.equals(clientHandler)) {
+                        // 跳过自己
+                        continue;
+                    }
+
+                    // 调用对应的发送方法
+                    handler.send(msg);
+                }
+            }
+        });
     }
 
     private class ClientListener extends Thread {
@@ -81,10 +115,12 @@ public class TCPServer {
 
                 // 构建处理消息的线程
                 try {
-                    ClientHandler clientHandler = new ClientHandler(clientScoket, clientHandler1 -> clientHanlerList.remove(clientHandler1));
+                    ClientHandler clientHandler = new ClientHandler(clientScoket, TCPServer.this);
                     // 读取并打印
                     clientHandler.readToPrint();
-                    clientHanlerList.add(clientHandler);
+                    synchronized (TCPServer.this) {
+                        clientHanlerList.add(clientHandler);
+                    }
                 } catch (IOException e) {
                     log.error("客户端连接异常:{}", e);
                 }
